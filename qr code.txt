@@ -1,0 +1,87 @@
+-----------in settings.py-----------
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
+MEDIA_URL = '/media/'
+-----------in urls.py------------
+from django.contrib import admin
+from django.urls import path,include
+from django.conf.urls.static import static
+from django.conf import settings
+
+urlpatterns = [
+   path('admin/', admin.site.urls),
+   path("",include("qrgenerator.urls"))
+]
+urlpatterns += static(settings.MEDIA_URL,document_root=settings.MEDIA_ROOT)
+
+--------Install libraries---------
+
+pip install PIL
+pip install qrcode
+
+--------In app's urls.py-----------
+
+from django.urls import path,include
+from . import views
+
+urlpatterns = [
+   path('', views.home,name='Home'),
+]
+
+----------In view.py, add the following lines --------
+
+from django.shortcuts import render
+from .models import QrCode
+# Create your views here.
+def home(request):
+   if request.method=="POST":
+      Url=request.POST['url']
+      QrCode.objects.create(url=Url)
+
+   qr_code=QrCode.objects.all()
+   return render(request,"home.html",{'qr_code':qr_code})
+
+-----------Create a "templates" folder in app directory (at the same level of migration folder) and add a file "home.html" in it with the following lines ---------
+
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>tut</title>
+   </head>
+   <body>
+      <form method="POST">
+         {% csrf_token %}
+         <input type="url" placeholder="URL PLEASE" requir
+ed name="url">
+         <button type= "submit" >get qrcode</button>
+      </form>
+      {% for qr in qr_code %}
+      <img src="{{qr.image.url}}"/><br>
+      {%endfor%}
+   </body>
+</html>
+
+
+-----Go to models.py and add the following lines------
+
+from django.db import models
+import qrcode
+from PIL import Image, ImageDraw
+from io import BytesIO
+from django.core.files import File
+
+# Create your models here.
+import random
+class QrCode(models.Model):
+   url=models.URLField()
+   image=models.ImageField(upload_to='qrcode',blank=True)
+
+   def save(self,*args,**kwargs):
+      qrcode_img=qrcode.make(self.url)
+      canvas=Image.new("RGB", (300,300),"white")
+      draw=ImageDraw.Draw(canvas)
+      canvas.paste(qrcode_img)
+      buffer=BytesIO()
+      canvas.save(buffer,"PNG")
+      self.image.save(f'image{random.randint(0,9999)}',File(buffer),save=False)
+      canvas.close()
+      super().save(*args,**kwargs)
